@@ -1,0 +1,154 @@
+#!/bin/bash
+
+# constants
+readonly config_dir="$HOME/.config/fboxbashdl"
+readonly cookie_file="$config_dir/cookies.json"
+
+# default values
+target_url="null"
+stop_date="1970-01-01"
+profile_name="null"
+use_browser_cookies=false
+site_cookie="null"
+pix_cookie="null"
+fan_cookie="null"
+current_cookie="null"
+dllocfolder="null"
+mkdir -p "$config_dir"
+
+# preserved help message
+help_message="
+  fboxbashdl - download images from pixiv and fanbox
+  fboxbashdl [options] 
+
+  --link -l URL                         URL you want to download from
+  --date -d DATE                        date you want to download from in format - yyyy-mm-dd (e.g 02/02/2024 or 2 feb 2024)
+                                        downloads all images by when not set
+  --get-cookies-from-browser PROFILE    gets both fanbox and pixiv cookies from firefox
+  --enter-cookies SITE COOKIE           allows manual entry of cookies for either pixiv or fanbox
+  --set-download-location DIR           allows you to change the download location of the scraper
+  --help -h                             shows this page
+"
+
+if (( $# == 0 )); then
+    echo "$help_message"
+    exit
+fi
+# argument parsing
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -l|--link)
+            if [[ -z "$2" ]] || [[ "$2" =~ ^- ]]; then
+              echo "link is required"
+              exit 1
+            fi
+            if [[ "$2" != *"pixiv.net"* ]] && [[ "$2" != *"fanbox.cc"* ]]; then
+              echo "url entered must be pixiv or fanbox"
+              exit 1
+            fi
+            if [[ "$2" == *"www.pixiv.net/en/artworks/"* ]] || [[ "$2" =~ .*\.fanbox\.cc/posts/([0-9]+)/?$ ]]; then
+              echo "entered neither user or tag"
+              exit 1
+            fi
+            target_url="$2"
+            shift 2
+            ;;
+        -d|--date)
+            if [[ -z "$2" ]] || [[ "$2" =~ ^- ]]; then
+              echo "date is required"
+              exit 1
+            fi
+            # using date to standardize input to yyyy-mm-dd
+            if ! stop_date=$(date -d "$2" +"%Y-%m-%d" 2>/dev/null); then
+                echo "error: invalid date format."
+                exit 1
+            fi
+            shift 2
+            ;;
+        --get-cookies-from-browser)
+            use_browser_cookies=true
+            ff_dir="$HOME/.mozilla/firefox/"
+            if [[ -z "$2" ]] || [[ "$2" =~ ^- ]]; then
+              echo "--get-cookies-from-browser requires the profile chosen"
+              exit 1
+            fi
+            profile_name=$(find $ff_dir -maxdepth 2 -type d -name "*$2" | head -n 1 | awk -F"/" '{print $6}')
+            # echo $profile_name
+            shift 2
+            ;;
+        --enter-cookies)
+            if [[ -z "$2" ]] || [[ "$2" =~ ^- ]]; then
+              echo "chosen site not specified"
+              exit 1
+            fi
+            site_cookie="$2"
+            # logic fix: ensure the next arg exists
+            if [[ -z "$3" ]] || [[ "$3" =~ ^= ]]; then
+                echo "error: missing cookie value."
+                exit 1
+            fi
+            if [[ "$site_cookie" == "pixiv" ]]; then
+                pix_cookie="$3"
+            elif [[ "$site_cookie" == "fanbox" ]]; then
+                fan_cookie="$3"
+            else
+                echo "invalid site entered"
+                exit 1
+            fi
+            shift 3
+            ;;
+        -h|--help)
+            echo "$help_message"
+            exit
+            ;;
+        --set-download-location)
+            if [[ -z "$2" ]] || [[ "$2" =~ ^- ]]; then
+              echo "no download location specified"
+              exit 1
+            fi
+            
+            if [[ "$2" == "~"* ]]; then
+              dllocfolder="${2/#\~/$HOME}"
+            elif [[ "$2" == "default" ]]; then
+              dllocfolder="$HOME/Downloads/firefox stuff"
+            else
+              dllocfolder=$2
+            fi
+            dllocfolder=$(realpath -m "$dllocfolder")
+            dllocfolder="${dllocfolder%/}"
+            shift 2
+            ;;
+        *)
+            echo "unknown argument: $1"
+            echo "$help_message"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$target_url" == "null" ]]; then
+  echo "error: the -l/--link argument is required"
+  echo "$help_message"
+  exit 1
+fi
+
+if [[ ! -f "/home/joe/.local/bin/fboxbashdl_backend" ]]; then
+    echo "error: c++ executable 'fboxbashdl_backend' not found."
+    exit 1
+fi
+if [[ $dllocfolder != "null" ]]; then
+  mkdir -p "$dllocfolder"
+fi
+if [[ $stop_date != "1970-01-01" ]]; then
+  echo "downloading up to date of: $stop_date"
+fi
+echo "calling backend now"
+/home/joe/.local/bin/fboxbashdl_backend \
+    --link "$target_url" \
+    --date "$stop_date" \
+    --use_browser_cookies "$use_browser_cookies" \
+    --pix-cookie "$pix_cookie" \
+    --fan-cookie "$fan_cookie" \
+    --profile "$profile_name" \
+    "$HOME" \
+    "$dllocfolder"
