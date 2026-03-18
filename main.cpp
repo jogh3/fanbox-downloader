@@ -70,7 +70,9 @@ time_t parse_api_date(string date_str){
 }
 std::mutex data_mtx;
 std::atomic<int> current_id_index{0};
+std::atomic<int> dl_num{0};
 std::atomic<bool> stop_flag{false};
+vector<string> failed_img_dls;
 vector<string> downloaded;
 struct worker_config {
   string search_type;
@@ -120,17 +122,18 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     }
 
     post_data current_dl = all_data[i];
-    
-    data_mtx.lock();
-    std::cout << "\33[2K\rDownloading " << (i+1) << "/" << all_data.size() << " | " << current_dl.post_title << std::flush;
-    data_mtx.unlock();
-
+    {
+    std::lock_guard<std::mutex> lock(data_mtx);
+    std::cout << "\33[2K\rDownloading " << (dl_num+1) << "/" << all_data.size() << " | " << current_dl.post_title << std::flush;
+    }
     if (current_dl.img_urls.empty()) continue;
 
     string dl_item;
+    bool post_success = false;
     if (current_dl.img_urls.size() < 4){
+      int success_dls = 0;
       for (int j = 0; j < current_dl.img_urls.size(); j++){
-        string img_name, referer;
+        string img_name;
         dl_item = current_dl.post_title+"_"+current_dl.post_id;
         if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
         if (config.search_type == "use" || config.search_type == "tag"){
@@ -138,10 +141,17 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
         } else if (config.search_type == "fan") {
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
           }
-        files.download_img(current_dl.img_urls[j], config.cookies, "", config.dlpath+"/"+dl_item, img_name,internet);
+        bool dl_suc = files.download_img(current_dl.img_urls[j], config.cookies, "", config.dlpath+"/"+dl_item, img_name,internet);
+        if (dl_suc) {
+          success_dls++;
+        } else {
+        std::lock_guard<std::mutex> lock(data_mtx); // RAII is safer than manual lock/unlock
+        failed_img_dls.push_back("failed img dl at post id: " + current_dl.post_id);
+        }
         usleep(Ms_s(2));
        // download images
       }
+      if (success_dls == current_dl.img_urls.size()) {dl_num++; post_success = true;}
     } else if(current_dl.img_urls.size() >= 4) {
       dl_item = current_dl.post_title+"_"+current_dl.post_id+".zip";
       vector<img_details> imgs_to_zip;
@@ -157,19 +167,26 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       }
       if (!files.zip_n_dl(imgs_to_zip,dl_item, config.dlpath)){
         std::cout << "zip failed" << std::endl;
-        stop_flag = true;
-        break;
+        imgs_to_zip.clear();
+        {
+          std::lock_guard<std::mutex> lock(data_mtx);
+          failed_img_dls.push_back("failed zip for post id: " + current_dl.post_id);
+        }
+        continue;
       }
       imgs_to_zip.clear();
+      dl_num++;
+      post_success = true;
       // get images to memory, then zip images
     }
-    data_mtx.lock();
+    if (post_success){
+    std::lock_guard<std::mutex> lock(data_mtx);
     if(config.search_type == "fan"){
     downloaded.push_back(config.user_id+".fanbox.cc/posts/"+current_dl.post_id);
     } else if (config.search_type == "use" || config.search_type == "tag"){
         downloaded.push_back("www.pixiv.net/en/artwork/"+current_dl.post_id);
     }
-    data_mtx.unlock();
+    }
   }
 }
 void get_missed_posts(const vector<post_data>& all_data, vector<string>& downloaded, vector<string*>& external, string search_type, string user_id, vector<string>& missed) {  
@@ -373,11 +390,11 @@ int main(int argc, char* argv[]){
     }
     std::cout << "\nnumber of post data gathered: " << all_post_data.size() << std::endl;
     if (search_type == "fan"){
-      std::cout << "--------------------\nall posts with external link: " << std::endl;
+      std::cout << "all posts with external links -------------------" << std::endl;
       for (const auto* url : external_posts){
         std::cout << *url << std::endl;
       }
-      std::cout << "--------------------\n" << std::endl;
+      std::cout << "-------------------------------------------------\n" << std::endl;
     }
     worker_dl_config dl_config = {search_type, folder_path,&all_cookies,user_id};
     for (int i = 0; i < num_threads; i++){
@@ -401,6 +418,11 @@ int main(int argc, char* argv[]){
     if(!non_used.empty()){
       files.write_list_non_used(folder_path,"missing posts.txt",non_used);
     }
+    std::cout << "\nfailed img dls ------------------" << std::endl;
+    for (int i = 0; i < failed_img_dls.size(); i++){
+      std::cout << failed_img_dls[i] << std::endl;
+    }
+    std::cout << "---------------------------------" << std::endl;
     std::cout << "\ncompleted download" << std::endl;
     curl_global_cleanup();
     return 1;
