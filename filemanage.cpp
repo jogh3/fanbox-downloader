@@ -9,7 +9,7 @@
 
 // if you want to use fs:: instead of std::filesystem::
 namespace fs = std::filesystem;
-
+string filehandler::configfolder = "";
 // private helper
 bool filehandler::contains(string haystack, string needle) {
     return haystack.find(needle) != string::npos;
@@ -165,7 +165,7 @@ string filehandler::get_ext(string url) {
     return ".jpg"; // fallback
 }
 bool filehandler::write_out(string responce){
-  std::ofstream output_log("output_log.txt");
+  std::ofstream output_log(configfolder+"output_log.txt");
   if (!output_log.is_open()){
     std::cout << "unable to open file" << std::endl;
     return false;

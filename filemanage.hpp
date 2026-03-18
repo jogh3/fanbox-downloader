@@ -10,6 +10,8 @@ using std::string;
 using std::vector;
 class getwebpage;
 class filehandler {
+  public:
+    static string configfolder;
   private:
     // helper function used internally by get_cookies
     bool contains(string haystack, string needle);

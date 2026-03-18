@@ -246,6 +246,7 @@ int main(int argc, char* argv[]){
     const string user_agent="Mozilla/5.0 (X11; Arch Linux; Linux x86_64)";
     const string default_dlloc=home+"/Downloads/firefox stuff";
     const string config_dir=home+"/.config/fboxbashdl";
+    files.configfolder = config_dir+"/";
     const string cookie_file=config_dir+"/cookies.json";
     const string firefox_db_lo=home+"/.mozilla/firefox/"+profile_name+"/cookies.sqlite";
     string user_id = files.get_folder_name(target_url);

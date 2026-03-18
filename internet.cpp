@@ -93,6 +93,13 @@ string getwebpage::scrape(string url, Json::Value *cookies, string referer){
     // std::cout << "url used:" << url << std::endl;
     res = curl_easy_perform(curl_handle);
     
+    long http_code = 0;
+    curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code == 403 || http_code == 429 || http_code == 503) {
+      std::cout << "\n[!] server block detected (http " << http_code << "). you are likely ip banned, rate limited, or your cookies are dead." << std::endl;
+      filehandler::write_out(responce);
+      return "{}";
+    }
     if (res != CURLE_OK){
       std::cout << "curl_easy_perform failed: " << curl_easy_strerror(res) << std::endl;
     } else {
@@ -101,10 +108,9 @@ string getwebpage::scrape(string url, Json::Value *cookies, string referer){
     if(headers) curl_slist_free_all(headers);
     curl_easy_cleanup(curl_handle);
     free(chunk.memory);
-  }
-    auto contains = [](string json){ if (json.find("blocked") != string::npos || json.find("denied") != string::npos) {return true;} return false;};
-    if (responce.empty() || responce == "{}" || contains(responce)){
-      std::cout << "empty responce from api, prob banned" << std::endl;
+    }
+    if (responce.empty() || responce == "{}"){
+      std::cout << "\nempty responce from api, prob banned, check config folder for output" << std::endl;
       filehandler::write_out(responce);
       return "{}";
     }
