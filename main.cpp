@@ -72,6 +72,7 @@ std::mutex data_mtx;
 std::atomic<int> current_id_index{0};
 std::atomic<int> dl_num{0};
 std::atomic<bool> stop_flag{false};
+std::atomic<bool> ended_early{false};
 vector<string> failed_img_dls;
 vector<string> downloaded;
 struct worker_config {
@@ -96,7 +97,7 @@ void fetch_details_worker(const vector<post_info>& all_ids, vector<post_data>& r
   }
   post_data pd = internet.get_post_details(all_ids[i],config.cookies,config.search_type,config.user_id);
   // std::cout << "DEBUG: pd.date = " << pd.date << std::endl;
-  if (pd.post_id == "null") {data_mtx.lock(); stop_flag = true; data_mtx.unlock();}
+  if (pd.post_id == "null") {stop_flag = true; ended_early = true; break;}
   data_mtx.lock();
   if (config.stop_date != 0 && parse_api_date(pd.date) <= config.stop_date){
     std::cout << "reached stop date" << std::endl;
@@ -385,6 +386,7 @@ int main(int argc, char* argv[]){
     current_id_index = 0; stop_flag = false;
     workers.clear();
     all_post_ids.clear();
+    if (ended_early == true) return -1;
     if (all_post_data.empty()){
       std::cout << "\nno posts available in time frame" << std::endl;
       return -1;
@@ -419,12 +421,14 @@ int main(int argc, char* argv[]){
     if(!non_used.empty()){
       files.write_list_non_used(folder_path,"missing posts.txt",non_used);
     }
-    std::cout << "\nfailed img dls ------------------" << std::endl;
-    for (int i = 0; i < failed_img_dls.size(); i++){
-      std::cout << failed_img_dls[i] << std::endl;
+    if (failed_img_dls.size() == 0){
+      std::cout << "\nfailed img dls ------------------" << std::endl;
+      for (int i = 0; i < failed_img_dls.size(); i++){
+        std::cout << failed_img_dls[i] << std::endl;
+      }
+      std::cout << "---------------------------------" << std::endl;
+      std::cout << "\ncompleted download" << std::endl;
     }
-    std::cout << "---------------------------------" << std::endl;
-    std::cout << "\ncompleted download" << std::endl;
     curl_global_cleanup();
     return 1;
 }

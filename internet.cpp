@@ -98,7 +98,7 @@ string getwebpage::scrape(string url, Json::Value *cookies, string referer){
     if (http_code == 403 || http_code == 429 || http_code == 503) {
       std::cout << "\n[!] server block detected (http " << http_code << "). you are likely ip banned, rate limited, or your cookies are dead." << std::endl;
       filehandler::write_out(responce);
-      return "{}";
+      return "failed";
     }
     if (res != CURLE_OK){
       std::cout << "curl_easy_perform failed: " << curl_easy_strerror(res) << std::endl;
@@ -112,7 +112,7 @@ string getwebpage::scrape(string url, Json::Value *cookies, string referer){
     if (responce.empty() || responce == "{}"){
       std::cout << "\nempty responce from api, prob banned, check config folder for output" << std::endl;
       filehandler::write_out(responce);
-      return "{}";
+      return "failed";
     }
   return responce;
 }
@@ -201,9 +201,10 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
         // URL: https://www.pixiv.net/ajax/user/{ID}/profile/all
         string api_url = "https://www.pixiv.net/ajax/user/" + id + "/profile/all";
         string json = scrape(api_url, cookies, referer);
-        if (json == ""){
-        return post_ids;
-        }
+        if (json == "failed"){
+          post_ids.push_back({"null",""});
+          return post_ids;
+        } 
         Json::Value root;
         std::stringstream ss(json);
         ss >> root;
@@ -227,6 +228,10 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
             string api_url = "https://www.pixiv.net/ajax/search/artworks/" + encoded_tag +"?word=" + encoded_tag + "&p=" + std::to_string(page) + "&mode=all";
             
             string json = scrape(api_url, cookies, referer);
+            if (json == "failed"){
+              post_ids.push_back({"null",""});
+              return post_ids;
+            }
             Json::Value root;
             std::stringstream ss(json);
             ss >> root;
@@ -264,6 +269,10 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
                 // std::cout << "scraping page: " << page_url << std::endl;
 
                 string json = scrape(page_url, cookies, "https://www.fanbox.cc/@"+id+"/posts");
+                if (json == "failed"){
+                  post_ids.push_back({"null",""});
+                  return post_ids;
+                }
                 Json::Value root;
                 std::stringstream ss(json);
                 ss >> root;
