@@ -135,7 +135,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       int success_dls = 0;
       for (int j = 0; j < current_dl.img_urls.size(); j++){
         string img_name;
-        dl_item = safe_title+"_"+current_dl.post_id;
+        dl_item = current_dl.post_id+"_"+safe_title;
         if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
         if (config.search_type == "use" || config.search_type == "tag"){
           img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
@@ -154,7 +154,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       }
       if (success_dls == current_dl.img_urls.size()) {dl_num++; post_success = true;}
     } else if(current_dl.img_urls.size() >= 4) {
-      dl_item = safe_title+"_"+current_dl.post_id+".zip";
+      dl_item = current_dl.post_id+"_"+safe_title+".zip";
       vector<img_details> imgs_to_zip;
       for (int j = 0; j < current_dl.img_urls.size();j++){
         string img_name;
@@ -427,8 +427,8 @@ int main(int argc, char* argv[]){
         std::cout << failed_img_dls[i] << std::endl;
       }
       std::cout << "---------------------------------" << std::endl;
-      std::cout << "\ncompleted download" << std::endl;
     }
+    std::cout << "\ncompleted download" << std::endl;
     curl_global_cleanup();
     return 1;
 }
