@@ -231,7 +231,7 @@ bool filehandler::write_list_non_used(string file_path,string file_name,vector<s
   if (outfile.is_open()){
     std::cout << "could not open file for writing: " << file_path << std::endl;
     if (file_name == "missing posts.txt"){
-      for (const auto post : list){
+      for (const auto& post : list){
         std::cout << post << std::endl;
       }
     return false;

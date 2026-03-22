@@ -1,5 +1,5 @@
 cxx = g++
-cxxflags = -std=c++17 -Wall -O2
+cxxflags = -std=c++17 -Wall -O2 -wno-sign-compare
 ldlibs = -lsqlite3 -ljsoncpp -lcurl -lzip
 target = fboxbashdl_backend
 srcs = $(wildcard *.cpp)
