@@ -39,7 +39,8 @@ class filehandler {
     bool download_img(string url,Json::Value* cookies, string referer,string dl_loc, string img_name, getwebpage& internet);
     bool zip_n_dl(vector<img_details>& imgs_to_zip,string dl_name,string dl_path);
     bool write_list_non_used(string file_path, string file_name, vector<string>& list);
-    bool write_list_external(string file_path, string file_name, vector<string*>& list_to_write); 
+    bool write_list_external(string file_path, string file_name, vector<string*>& list_to_write);
+    bool write_string_to_file(string file_path, string content);
 };
 
 #endif

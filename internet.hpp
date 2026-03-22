@@ -25,14 +25,19 @@ struct post_data {
   bool is_external;
   string self_url;
   string post_title;
+  bool is_ugoira;
+  string ugoira_frames;
+
   post_data(){}
-  post_data(string inp_post_id,string inp_date,vector<string> inp_img_urls, bool inp_is_external,string inp_self,string inp_post_title){
+  post_data(string inp_post_id,string inp_date,vector<string> inp_img_urls, bool inp_is_external,string inp_self,string inp_post_title, bool inp_is_ug, string inp_ugoi){
     post_id = inp_post_id;
     date = inp_date;
     img_urls = inp_img_urls;
     is_external = inp_is_external;
     self_url = inp_self;
     post_title = inp_post_title;
+    is_ugoira = inp_is_ug;
+    ugoira_frames = inp_ugoi;
   }
 };
 struct img_details{

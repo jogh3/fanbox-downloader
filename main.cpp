@@ -131,27 +131,46 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     string safe_title = files.clean_filename(current_dl.post_title);
     string dl_item;
     bool post_success = false;
-    if (current_dl.img_urls.size() < 4){
-      int success_dls = 0;
-      for (int j = 0; j < current_dl.img_urls.size(); j++){
-        string img_name;
-        dl_item = current_dl.post_id+"_"+safe_title;
-        if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
-        if (config.search_type == "use" || config.search_type == "tag"){
-          img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
-        } else if (config.search_type == "fan") {
+    if (current_dl.is_ugoira){
+      dl_item = current_dl.post_id +"_" + safe_title;
+      if(!files.create_folder(config.dlpath+"/"+dl_item)){
+        std::cout << "unable to create post folder" << std::endl;
+        stop_flag = true;
+        break;
+      }
+      string zip_name = current_dl.post_id+"_ugoira_frames.zip";
+      bool dl_suc = files.download_img(current_dl.img_urls[0],config.cookies,referer,config.dlpath+"/"+dl_item,zip_name,internet);
+      current_dl.img_urls.erase(current_dl.img_urls.begin());
+      if (dl_suc) {
+        string json_path = config.dlpath+"/"+dl_item+"/"+current_dl.post_id+"_frames.json";
+        files.write_string_to_file(json_path, current_dl.ugoira_frames);
+        dl_num++;
+        post_success=true;
+      } else {
+        std::lock_guard<std::mutex> lock(data_mtx);
+        failed_img_dls.push_back("failed ugoira at post id: " + current_dl.post_id);
+      }
+    } else if (current_dl.img_urls.size() < 4 && !current_dl.img_urls.empty()){
+        int success_dls = 0;
+        for (int j = 0; j < current_dl.img_urls.size(); j++){
+          string img_name;
+          dl_item = current_dl.post_id+"_"+safe_title;
+          if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
+          if (config.search_type == "use" || config.search_type == "tag"){
+            img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
+          } else if (config.search_type == "fan") {
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
           }
-        bool dl_suc = files.download_img(current_dl.img_urls[j], config.cookies, "", config.dlpath+"/"+dl_item, img_name,internet);
-        if (dl_suc) {
-          success_dls++;
-        } else {
-        std::lock_guard<std::mutex> lock(data_mtx); // RAII is safer than manual lock/unlock
-        failed_img_dls.push_back("failed img dl at post id: " + current_dl.post_id);
+          bool dl_suc = files.download_img(current_dl.img_urls[j], config.cookies, "", config.dlpath+"/"+dl_item, img_name,internet);
+          if (dl_suc) {
+            success_dls++;
+          } else {
+            std::lock_guard<std::mutex> lock(data_mtx); // RAII is safer than manual lock/unlock
+            failed_img_dls.push_back("failed img dl at post id: " + current_dl.post_id);
+          }
+          usleep(Ms_s(2));
+          // download images
         }
-        usleep(Ms_s(2));
-       // download images
-      }
       if (success_dls == current_dl.img_urls.size()) {dl_num++; post_success = true;}
     } else if(current_dl.img_urls.size() >= 4) {
       dl_item = current_dl.post_id+"_"+safe_title+".zip";
@@ -159,7 +178,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       for (int j = 0; j < current_dl.img_urls.size();j++){
         string img_name;
         if (config.search_type == "use" || config.search_type == "tag"){
-          img_name = current_dl.post_id+"_p"+std::to_string(j)+"master_1200"+files.get_ext(current_dl.img_urls[j]);
+          img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
         } else if (config.search_type == "fan") {
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
           }

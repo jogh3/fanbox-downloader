@@ -329,7 +329,7 @@ string getwebpage::url_decode(string value){
   return value;
 }
 post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, string type, string artist_id){
-  post_data full_data = post_data("","",{""},false,"","");
+  post_data full_data = post_data("","",{""},false,"","",false,"");
   if(type == "use" || type == "tag"){
     string url,referer,json_out,json_img_out; 
     url = "https://www.pixiv.net/ajax/illust/"+post.post_id;
@@ -350,10 +350,32 @@ post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, str
       full_data.post_id = "null";
       return full_data;
     }
-    string date = "",post_title = "";
+    string date = "",post_title = "", ug_frames = "";
+    bool is_ug = false;
     vector<string> img_urls;
     post_title= scrape_out["body"]["title"].asString();
     date = post.date;
+    if (scrape_out["body"]["illustType"].asInt() == 2) {
+      is_ug = true;
+      string meta_url = "https://www.pixiv.net/ajax/illust/" + post.post_id + "/ugoira_meta";
+      string meta_json = scrape(meta_url, cookies, referer);
+      if (meta_json != "{}" && meta_json != "failed") {
+        Json::Value meta_root;
+        std::stringstream meta_ss(meta_json);
+        meta_ss >> meta_root;    
+        if (!meta_root["error"].asBool()) {
+          // originalSrc is the direct link to the server-side zip file
+          img_urls.push_back(meta_root["body"]["originalSrc"].asString());
+          // convert the frames array back into a formatted raw string
+          ug_frames = meta_root["body"]["frames"].toStyledString();
+        }
+      }
+    } else {
+        // standard image extraction for illust/manga
+        for (int j = 0; j < scrape_img_out["body"].size(); j++){
+          img_urls.push_back(scrape_img_out["body"][j]["urls"]["regular"].asString());
+          }
+      }
     if (type == "use"){
       // std::cout << "DEBUG: getting uploadDate of:" << scrape_out["body"]["uploadDate"].asString() << "for post" << post.post_id << std::endl;
       date = scrape_out["body"]["uploadDate"].asString();
@@ -362,8 +384,9 @@ post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, str
     for (int j = 0; j < scrape_img_out["body"].size(); j++){
       img_urls.push_back(scrape_img_out["body"][j]["urls"]["regular"].asString());
     }
-    full_data = post_data(post.post_id,date,img_urls,false,"",post_title);
+    full_data = post_data(post.post_id,date,img_urls,false,"",post_title,is_ug,ug_frames);
     return full_data;
+
   }else if (type == "fan") {
     string url,referer,json_out;
     url = "https://api.fanbox.cc/post.info?postId="+post.post_id;
@@ -399,7 +422,7 @@ post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, str
       is_external = true;
       self_url = artist_id+".fanbox.cc/posts/"+post.post_id;
     }
-    full_data = post_data(post.post_id,date,img_urls,is_external,self_url,post_title);
+    full_data = post_data(post.post_id,date,img_urls,is_external,self_url,post_title,false,"");
     return full_data;
   }
   return full_data;

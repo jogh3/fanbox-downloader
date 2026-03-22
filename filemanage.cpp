@@ -258,3 +258,13 @@ bool filehandler::write_list_external(string file_path, string file_name, vector
     out_file.close();
     return true;
 }
+bool filehandler::write_string_to_file(string file_path, string content) {
+    std::ofstream out_file(file_path);
+    if (!out_file.is_open()) {
+        std::cout << "could not open file to write string: " << file_path << std::endl;
+        return false;
+    }
+    out_file << content;
+    out_file.close();
+    return true;
+}
