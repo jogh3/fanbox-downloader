@@ -247,7 +247,46 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
                 keep_going = false;
             }
        }
-    } 
+    }
+    else if (type == "user_tag") {
+      size_t start_pos = url.find("/artworks/")+10;
+      size_t endpos = url.find("?", start_pos);
+      if (endpos == string::npos) endpos = url.length();
+      string target_tag;
+      if (endpos != string::npos) {
+        target_tag = url.substr(start_pos, endpos - start_pos);
+      } else {
+          target_tag = url.substr(start_pos);
+        }
+      int offset = 0;
+      bool keep_going = true;
+      while(keep_going) {
+        // endpoint specifically for filtering a user's illusts/manga by tag
+        string req_url = "https://www.pixiv.net/ajax/user/" + id + "/illustmanga/tag?tag=" + target_tag + "&offset=" + std::to_string(offset) + "&limit=48";
+            
+        string json_res = scrape(req_url, cookies, referer);
+        if (json_res == "failed"){
+          post_ids.push_back({"null", ""});
+          return post_ids;
+        }
+            
+        Json::Value root;
+        std::stringstream ss(json_res);
+        ss >> root;
+
+        // the api returns the array inside body -> works
+        const Json::Value& works_array = root["body"]["works"];
+            
+        if (!root["error"].asBool() && works_array.isArray() && works_array.size() > 0) {
+          for (const auto& item : works_array) {
+          post_ids.push_back({item["id"].asString(), item["createDate"].asString()});
+        }
+          offset += 48; // increment the offset by the limit
+        } else {
+            keep_going = false; 
+          }
+        }
+    }
     else if (type == "fan") {
         // --- fanbox logic (updated to use paginateCreator) ---
         // step 1: get the list of all page urls
@@ -330,7 +369,7 @@ string getwebpage::url_decode(string value){
 }
 post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, string type, string artist_id){
   post_data full_data = post_data("","",{""},false,"","",false,"");
-  if(type == "use" || type == "tag"){
+  if(type == "use" || type == "tag" || type == "user_tag"){
     string url,referer,json_out,json_img_out; 
     url = "https://www.pixiv.net/ajax/illust/"+post.post_id;
     referer="https://www.pixiv.net/artworks/"+post.post_id;

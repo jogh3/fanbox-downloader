@@ -156,7 +156,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
           string img_name;
           dl_item = current_dl.post_id+"_"+safe_title;
           if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
-          if (config.search_type == "use" || config.search_type == "tag"){
+          if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){
             img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
           } else if (config.search_type == "fan") {
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
@@ -177,7 +177,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       vector<img_details> imgs_to_zip;
       for (int j = 0; j < current_dl.img_urls.size();j++){
         string img_name;
-        if (config.search_type == "use" || config.search_type == "tag"){
+        if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){
           img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
         } else if (config.search_type == "fan") {
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
@@ -203,7 +203,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     std::lock_guard<std::mutex> lock(data_mtx);
     if(config.search_type == "fan"){
     downloaded.push_back(config.user_id+".fanbox.cc/posts/"+current_dl.post_id);
-    } else if (config.search_type == "use" || config.search_type == "tag"){
+    } else if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){
         downloaded.push_back("www.pixiv.net/en/artwork/"+current_dl.post_id);
     }
     }
@@ -235,7 +235,7 @@ void get_missed_posts(const vector<post_data>& all_data, vector<string>& downloa
           string post_url;
           if(search_type == "fan"){
             post_url = user_id+".fanbox.cc/posts/"+all_data[i].post_id;
-          } else if (search_type == "use" || search_type == "tag"){
+          } else if (search_type == "use" || search_type == "tag" || search_type == "user_tag"){
               post_url = "www.pixiv.net/en/artwork/"+all_data[i].post_id;
           }
           missed.push_back(post_url);
@@ -275,8 +275,14 @@ int main(int argc, char* argv[]){
     string search_type;
     if (target_url.find("pixiv.net") != string::npos){
       if(target_url.find("/users/") != string::npos){
-        api_url = pixiv_api+"/user/"+user_id;
-        search_type = "use";
+        size_t artwork_pos = target_url.find("/artworks/");
+        if (artwork_pos != string::npos && target_url.length() > artwork_pos+10){
+          api_url = pixiv_api+"/user/"+user_id;
+          search_type = "user_tag";
+        } else {
+            api_url = pixiv_api+"/user/"+user_id;
+            search_type = "use";
+          }
       } else if (target_url.find("/tags/") != string::npos) {
         api_url = pixiv_api+"/search/tags/"+user_id;
         search_type="tag";
@@ -350,11 +356,29 @@ int main(int argc, char* argv[]){
       folder_path=dlpath+"/"+artist_name+"("+user_id+")";
     } else if (search_type == "tag") {
       url_referer="https://www.pixiv.net/";
-      
       folder_path = dlpath+"/"+user_id;
     } else if (search_type == "fan") {
       url_referer = "https://www.fanbox.cc/";
       folder_path = dlpath+"/"+user_id;
+    } else if (search_type == "user_tag") {
+      url_referer="https://www.pixiv.net/member.php?id="+user_id;
+      Json::Value th_cookies = files.read_cookies(cookie_file);
+      string json_response = internet.scrape(api_url+"?full=1",&th_cookies,url_referer);
+      Json::Value root;
+      std::stringstream ss(json_response);
+      ss >> root;
+      if (!root["error"].asBool()){
+        artist_name = root["body"]["name"].asString();
+      } else {
+        std::cout << "failed to get artist name: " << root["message"].asString() << std::endl;
+        return -1;
+      }
+      size_t tag_start = target_url.find("/artworks/")+10;
+      size_t tag_end = target_url.find("?",tag_start);
+      if (tag_end == string::npos) tag_end = target_url.length();
+      string use_tag = internet.url_decode(target_url.substr(tag_start,tag_end-tag_start));
+      use_tag = files.clean_filename(use_tag);
+      folder_path = dlpath+"/"+artist_name+"("+user_id+")"+"("+use_tag+")";
     }
     if(!files.create_folder(folder_path)){
       std::cout << "failed to create download folder";
@@ -366,7 +390,7 @@ int main(int argc, char* argv[]){
     // if (search_type == "use"){
     //   // reverse(all_post_ids.begin(),all_post_ids.end());
     // }
-    if (search_type == "use" || search_type == "tag") {
+    if (search_type == "use" || search_type == "tag" || search_type =="user_tag") {
       std::sort(all_post_ids.begin(), all_post_ids.end(), [](const post_info& a, const post_info& b) {
         // Sort Descending (Newest First)
         // We must compare lengths first to handle "99" vs "100" correctly
