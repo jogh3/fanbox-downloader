@@ -2,10 +2,10 @@
 this is a multithreaded command line tool to download from pixiv and fanbox using the apis
 
 ## installation
-`` bash
+``` bash
   git clone https://github.com/jogh3/fanbox-downloader.git
   g++ -o fboxbashdl_backend *.cpp -lsqlite3 -ljsoncpp -lcurl -lzip
-``
+```
 ## usage
 ``` bash
   fboxbashdl [options] 
