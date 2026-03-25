@@ -228,7 +228,7 @@ bool filehandler::zip_n_dl(vector<img_details>& imgs_to_zip, string dl_name, str
 }
 bool filehandler::write_list_non_used(string file_path,string file_name,vector<string>& list){
   std::ofstream outfile(file_path+"/"+file_name);
-  if (outfile.is_open()){
+  if (!outfile.is_open()){
     std::cout << "could not open file for writing: " << file_path << std::endl;
     if (file_name == "missing posts.txt"){
       for (const auto& post : list){
@@ -244,7 +244,7 @@ bool filehandler::write_list_non_used(string file_path,string file_name,vector<s
   return true;
 }
 bool filehandler::write_list_external(string file_path, string file_name, vector<string*>& list_to_write) {
-    std::ofstream out_file(file_path);
+    std::ofstream out_file(file_path+"/"+file_name);
     if (!out_file.is_open()) {
         std::cout << "could not open file for writing: " << file_path << std::endl;
         return false;

@@ -125,7 +125,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     post_data current_dl = all_data[i];
     {
     std::lock_guard<std::mutex> lock(data_mtx);
-    std::cout << "\33[2K\rDownloading " << (dl_num+1) << "/" << all_data.size() << " | " << current_dl.post_title << std::flush;
+    std::cout << "\33[2K\rDownloading: " << (i+1) << "/" << all_data.size() << " actual num. downloaded: " << (dl_num+1) << " | " << current_dl.post_title << std::flush;
     }
     if (current_dl.img_urls.empty()) continue;
     string safe_title = files.clean_filename(current_dl.post_title);
