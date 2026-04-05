@@ -9,7 +9,8 @@ this is a multithreaded command line tool to download from pixiv and fanbox usin
 
 ## prerequisites
 before building, you need to install the required development libraries for your system:
-g++ make libsqlite3-dev libjsoncpp-dev libcurl4-openssl-dev libzip-dev
+
+``g++ make libsqlite3-dev libjsoncpp-dev libcurl4-openssl-dev libzip-dev``
 
 ## installation
 ``` bash
