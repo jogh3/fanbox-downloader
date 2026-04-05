@@ -28,7 +28,7 @@ namespace fs = std::filesystem;
 void print_results(int amount_dld,int full_dl){
   std::cout << "\33[2K\r" << "downloading " << amount_dld << "/" << full_dl << "\r\n";
 }
-time_t parse_bash_date(string date_str){
+time_t parse_bash_date(string date_str){ // turns the bash date into a single number to be compared
   struct tm tm = {0};
   if (sscanf(date_str.c_str(),"%d-%d-%d",&tm.tm_year,&tm.tm_mon,&tm.tm_mday) != 3){
     return 0;
@@ -39,7 +39,7 @@ time_t parse_bash_date(string date_str){
   // std::cout << "input_time" << timegm(&tm);
   return timegm(&tm);
 }
-time_t parse_api_date(string date_str){
+time_t parse_api_date(string date_str){ // turns the api data into the same single number as bash date for comparison
     struct tm tm = {0};
     int off_sign = 1; // 1 for +, -1 for -
     int off_hour = 0;
@@ -68,7 +68,8 @@ time_t parse_api_date(string date_str){
     // std::cout << "api_time" << t;
     return t;
 }
-std::mutex data_mtx;
+// global variables and structs, mostly for multithreading purposes
+std::mutex data_mtx; // synchronization primitive in the <mutex> header used to protect shared data from simultaneous access by multiple threads
 std::atomic<int> current_id_index{0};
 std::atomic<int> dl_num{0};
 std::atomic<bool> stop_flag{false};
@@ -87,11 +88,12 @@ struct worker_dl_config{
   Json::Value* cookies;
   string user_id;
 };
-size_t Ms_s(int stime){return stime*1000000;}
+size_t Ms_s(int stime){return stime*1000000;} // simple function to turn seconds into microseconds for usleep
+// gets the important data of posts, to be downloaded,using multiple threads
 void fetch_details_worker(const vector<post_info>& all_ids, vector<post_data>& results,vector<string*>& external_urls, getwebpage& internet, worker_config config){
   while (true){
   if (stop_flag) break;
-  int i = current_id_index++;
+  int i = current_id_index++; // doesnt need to be locked as current_id_index is atomic(cannot be race conditioned)
   if ( i >= all_ids.size()){
     break;
   }
@@ -99,7 +101,7 @@ void fetch_details_worker(const vector<post_info>& all_ids, vector<post_data>& r
   // std::cout << "DEBUG: pd.date = " << pd.date << std::endl;
   if (pd.post_id == "null") {stop_flag = true; ended_early = true; break;}
   data_mtx.lock();
-  if (config.stop_date != 0 && parse_api_date(pd.date) <= config.stop_date){
+  if (config.stop_date != 0 && parse_api_date(pd.date) <= config.stop_date){ // checks if stop date is reached, to avoid wasting time
     std::cout << "reached stop date" << std::endl;
     stop_flag = true;
   }else {
@@ -113,7 +115,7 @@ void fetch_details_worker(const vector<post_info>& all_ids, vector<post_data>& r
   usleep(Ms_s(5));
   }
 }
-
+// fetches all the images and downloads them, one thread per post
 void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, filehandler& files, worker_dl_config config, string& referer){
   while (true){
     if (stop_flag) break;
@@ -127,13 +129,13 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     std::lock_guard<std::mutex> lock(data_mtx);
     std::cout << "\33[2K\rDownloading: " << (i+1) << "/" << all_data.size() << " actual num. downloaded: " << (dl_num+1) << " | " << current_dl.post_title << std::flush;
     }
-    if (current_dl.img_urls.empty()) continue;
+    if (current_dl.img_urls.empty()) continue; // skip if no images
     string safe_title = files.clean_filename(current_dl.post_title);
     string dl_item;
     bool post_success = false;
     if (current_dl.is_ugoira){
       dl_item = current_dl.post_id +"_" + safe_title;
-      if(!files.create_folder(config.dlpath+"/"+dl_item)){
+      if(!files.create_folder(config.dlpath+"/"+dl_item)){ // check if folder is unable to be created, stop as could be greater issue
         std::cout << "unable to create post folder" << std::endl;
         stop_flag = true;
         break;
@@ -141,7 +143,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       string zip_name = current_dl.post_id+"_ugoira_frames.zip";
       bool dl_suc = files.download_img(current_dl.img_urls[0],config.cookies,referer,config.dlpath+"/"+dl_item,zip_name,internet);
       current_dl.img_urls.erase(current_dl.img_urls.begin());
-      if (dl_suc) {
+      if (dl_suc) { // checks if successful download
         string json_path = config.dlpath+"/"+dl_item+"/"+current_dl.post_id+"_frames.json";
         files.write_string_to_file(json_path, current_dl.ugoira_frames);
         dl_num++;
@@ -151,18 +153,18 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
         failed_img_dls.push_back("failed ugoira at post id: " + current_dl.post_id);
       }
     } else if (current_dl.img_urls.size() < 4 && !current_dl.img_urls.empty()){
-        int success_dls = 0;
+        int success_dls = 0; // number of images successfully downloaded, for insurance
         for (int j = 0; j < current_dl.img_urls.size(); j++){
           string img_name;
           dl_item = current_dl.post_id+"_"+safe_title;
           if (!files.create_folder(config.dlpath+"/"+dl_item)){std::cout << "unable to create post folder" << std::endl; stop_flag = true; break;}
-          if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){
+          if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){ // checks if pixiv or not
             img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
-          } else if (config.search_type == "fan") {
+          } else if (config.search_type == "fan") { // checks if fanbox
             img_name = current_dl.post_id+"_p"+std::to_string(j)+files.get_ext(current_dl.img_urls[j]);
           }
           bool dl_suc = files.download_img(current_dl.img_urls[j], config.cookies, "", config.dlpath+"/"+dl_item, img_name,internet);
-          if (dl_suc) {
+          if (dl_suc) { // checks if download is successful
             success_dls++;
           } else {
             std::lock_guard<std::mutex> lock(data_mtx); // RAII is safer than manual lock/unlock
@@ -171,11 +173,11 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
           usleep(Ms_s(2));
           // download images
         }
-      if (success_dls == current_dl.img_urls.size()) {dl_num++; post_success = true;}
+      if (success_dls == current_dl.img_urls.size()) {dl_num++; post_success = true;} // final check to see if entire folder is downloaded properly
     } else if(current_dl.img_urls.size() >= 4) {
       dl_item = current_dl.post_id+"_"+safe_title+".zip";
-      vector<img_details> imgs_to_zip;
-      for (int j = 0; j < current_dl.img_urls.size();j++){
+      vector<img_details> imgs_to_zip; // image data that will be zipped
+      for (int j = 0; j < current_dl.img_urls.size();j++){ // downloads the images to memory instead of disk
         string img_name;
         if (config.search_type == "use" || config.search_type == "tag" || config.search_type == "user_tag"){
           img_name = current_dl.post_id+"_p"+std::to_string(j)+"_master_1200"+files.get_ext(current_dl.img_urls[j]);
@@ -185,7 +187,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
           imgs_to_zip.push_back({internet.fetch_image_to_memory(current_dl.img_urls[j],referer,config.cookies),img_name});
           usleep(Ms_s(2));
       }
-      if (!files.zip_n_dl(imgs_to_zip,dl_item, config.dlpath)){
+      if (!files.zip_n_dl(imgs_to_zip,dl_item, config.dlpath)){ // writes zip to disk
         std::cout << "zip failed" << std::endl;
         imgs_to_zip.clear();
         {
@@ -199,7 +201,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
       post_success = true;
       // get images to memory, then zip images
     }
-    if (post_success){
+    if (post_success){ // final success check for any failed downloads
     std::lock_guard<std::mutex> lock(data_mtx);
     if(config.search_type == "fan"){
     downloaded.push_back(config.user_id+".fanbox.cc/posts/"+current_dl.post_id);
@@ -209,6 +211,7 @@ void fetch_image_worker(const vector<post_data>& all_data,getwebpage& internet, 
     }
   }
 }
+// checks full unused posts, that either weren't external or failed/did not need to be downloaded
 void get_missed_posts(const vector<post_data>& all_data, vector<string>& downloaded, vector<string*>& external, string search_type, string user_id, vector<string>& missed) {  
     // step 1: sort the downloaded vector to allow binary search
     std::sort(downloaded.begin(), downloaded.end());
@@ -242,12 +245,13 @@ void get_missed_posts(const vector<post_data>& all_data, vector<string>& downloa
         }
     }
 }
+
 int main(int argc, char* argv[]){
-    getwebpage internet;
+    getwebpage internet; // initialize necessary objects
     filehandler files;
     curl_global_init(CURL_GLOBAL_ALL);
     std::cout << "starting download/cookie getting now" << std::endl;
-    string target_url=argv[2];
+    string target_url=argv[2]; // parsing the input from the bash frontend
     string stop_date=argv[4];
     string profile_name, pix_cookie = "",fan_cookie = "", dlloc = "";
     if (std::string(argv[12]) != "null"){
@@ -261,6 +265,7 @@ int main(int argc, char* argv[]){
       fan_cookie=argv[10];
     }
     string home=argv[13];
+    // constant variables to be used throughout the script
     const string pixiv_api="https://www.pixiv.net/ajax";
     const string fanbox_api="https://api.fanbox.cc";
     const string user_agent="Mozilla/5.0 (X11; Arch Linux; Linux x86_64)";
@@ -269,11 +274,11 @@ int main(int argc, char* argv[]){
     files.configfolder = config_dir+"/";
     const string cookie_file=config_dir+"/cookies.json";
     const string firefox_db_lo=home+"/.mozilla/firefox/"+profile_name+"/cookies.sqlite";
-    string user_id = files.get_folder_name(target_url);
+    string user_id = files.get_folder_name(target_url); // gets id of user being scraped
     user_id = internet.url_decode(user_id);
     string api_url;
     string search_type;
-    if (target_url.find("pixiv.net") != string::npos){
+    if (target_url.find("pixiv.net") != string::npos){ // this if statement gets the type of posts being scraped and unnecessarily makes the api url
       if(target_url.find("/users/") != string::npos){
         size_t artwork_pos = target_url.find("/artworks/");
         if (artwork_pos != string::npos && target_url.length() > artwork_pos+10){
@@ -291,12 +296,12 @@ int main(int argc, char* argv[]){
         api_url = fanbox_api+user_id;
         search_type="fan";
     }
-    if (std::string(argv[14]) == "null") {
+    if (std::string(argv[14]) == "null") { // checks if a new download location has been set or not
       dlloc = default_dlloc;
     } else {
       dlloc = argv[14];
     }
-    if (use_browser_cookies == "true"){
+    if (use_browser_cookies == "true"){ // gets and sets/saves the cookies to be used by the scraper, either from browser or manually entered
       std::cout << "copying cookies.sqlite3 now" << std::endl;
       if(!files.copy_ffdb(firefox_db_lo,config_dir+"copydb.sqlite")){
         return -1;
@@ -328,7 +333,7 @@ int main(int argc, char* argv[]){
         return -1;
       }
     }
-    if (std::string(argv[14]) != "null"){
+    if (std::string(argv[14]) != "null"){ // writes it all to a save file
       Json::Value root = files.read_cookies(cookie_file);
       root["dlloc"] = dlloc;
       string cookies_sjson = root.toStyledString();
@@ -340,7 +345,7 @@ int main(int argc, char* argv[]){
     string artist_name="";
     string folder_path="";
     string url_referer="";
-    if (search_type == "use"){
+    if (search_type == "use"){ // gets the actual name of artist, not just id
       url_referer="https://www.pixiv.net/member.php?id="+user_id;
       Json::Value th_cookies = files.read_cookies(cookie_file);
       string json_response = internet.scrape(api_url+"?full=1",&th_cookies,url_referer);
@@ -353,7 +358,7 @@ int main(int argc, char* argv[]){
         std::cout << "failed to get artist name: " << root["message"].asString() << std::endl;
         return -1;
       }
-      folder_path=dlpath+"/"+artist_name+"("+user_id+")";
+      folder_path=dlpath+"/"+artist_name+"("+user_id+")"; // sets the name used the download folder for this scrape in the set download folder
     } else if (search_type == "tag") {
       url_referer="https://www.pixiv.net/";
       folder_path = dlpath+"/"+user_id;
@@ -384,13 +389,13 @@ int main(int argc, char* argv[]){
       std::cout << "failed to create download folder";
       return -1;
     }
-    Json::Value all_cookies = files.read_cookies(cookie_file);
-    vector<post_info> all_post_ids = internet.get_all_post_ids(target_url, user_id, search_type, &all_cookies,url_referer);
+    Json::Value all_cookies = files.read_cookies(cookie_file); // opens the save file for cookies and dl location in memory to be used everywhere
+    vector<post_info> all_post_ids = internet.get_all_post_ids(target_url, user_id, search_type, &all_cookies,url_referer); // gets all the posts
     std::cout << "Found " << all_post_ids.size() << " posts" << std::endl;
     // if (search_type == "use"){
     //   // reverse(all_post_ids.begin(),all_post_ids.end());
     // }
-    if (search_type == "use" || search_type == "tag" || search_type =="user_tag") {
+    if (search_type == "use" || search_type == "tag" || search_type =="user_tag") { // sorts the posts by ids if scraping pixiv
       std::sort(all_post_ids.begin(), all_post_ids.end(), [](const post_info& a, const post_info& b) {
         // Sort Descending (Newest First)
         // We must compare lengths first to handle "99" vs "100" correctly
@@ -405,14 +410,14 @@ int main(int argc, char* argv[]){
       real_stop = parse_bash_date(stop_date);
     }
     vector<post_data> all_post_data;
-    all_post_data.reserve(all_post_ids.size());
-    vector<string*> external_posts;
-    worker_config config = {search_type,user_id,real_stop,&all_cookies};
-    unsigned int num_threads = std::thread::hardware_concurrency();
-    if (num_threads == 0){std::cout << "no threads found set default" << std::endl; num_threads = 1;};
-    if (num_threads > 2) num_threads = 2;
+    all_post_data.reserve(all_post_ids.size()); // reserves space for all the data,, even if not used due to stop data
+    vector<string*> external_posts; // vector of pointers is why space is reserved so data isn't reallocated somewhere else, making pointers invalid
+    worker_config config = {search_type,user_id,real_stop,&all_cookies}; // sets config for all the workers
+    unsigned int num_threads = std::thread::hardware_concurrency(); // gets max num of threads
+    if (num_threads == 0){std::cout << "no threads found set default" << std::endl; num_threads = 1;}; // if unable to get info use one thread(every cpu should have at least 1, right?)
+    if (num_threads > 2) num_threads = 2; // set it to 2 threads regardless, as this is the max to not get ip banned, from my testing at least
     vector<std::thread> workers;
-    for (int i = 0; i < num_threads; i++){
+    for (int i = 0; i < num_threads; i++){ // creates the jobs for the threads
       // we pass 'std::ref' for references so they aren't copied
       workers.push_back(std::thread(
         fetch_details_worker,
@@ -423,14 +428,14 @@ int main(int argc, char* argv[]){
         config
     ));
     }
-    for (auto& t : workers){
+    for (auto& t : workers){ // buffer to ensure all threads finish what they're doing before moving onto the next part of the program
       if (t.joinable()) t.join();
     }
-    current_id_index = 0; stop_flag = false;
+    current_id_index = 0; stop_flag = false; // reset the variables for next part, downloading
     workers.clear();
-    all_post_ids.clear();
+    all_post_ids.clear(); // clear all ids as we are done with them, all necessary data is in the all_post_data variable
     if (ended_early == true) return -1;
-    if (all_post_data.empty()){
+    if (all_post_data.empty()){ // exit of not posts were collected
       std::cout << "\nno posts available in time frame" << std::endl;
       return -1;
     }
@@ -442,7 +447,7 @@ int main(int argc, char* argv[]){
       }
       std::cout << "-------------------------------------------------\n" << std::endl;
     }
-    worker_dl_config dl_config = {search_type, folder_path,&all_cookies,user_id};
+    worker_dl_config dl_config = {search_type, folder_path,&all_cookies,user_id}; // sets the downloader config, to allow for all threads to have necessary info
     for (int i = 0; i < num_threads; i++){
       workers.push_back(std::thread(
         fetch_image_worker,
@@ -457,19 +462,20 @@ int main(int argc, char* argv[]){
       if(t.joinable()) t.join();
     }
     vector<string> non_used;
-    get_missed_posts(all_post_data,downloaded,external_posts,search_type,user_id,non_used);
-    if (!external_posts.empty()){
+    get_missed_posts(all_post_data,downloaded,external_posts,search_type,user_id,non_used); // get all posts that weren't processed in any way
+    if (!external_posts.empty()){ // if any external_posts write them to a txt file to be kept just in case
       files.write_list_external(folder_path,"external posts.txt",external_posts);
     }
-    if(!non_used.empty()){
+    if(!non_used.empty()){ // write all un processed posts to a file just in case
       files.write_list_non_used(folder_path,"missing posts.txt",non_used);
     }
-    if (failed_img_dls.size() != 0){
+    if (failed_img_dls.size() != 0){  // output and print any failed posts
       std::cout << "\nfailed img dls ------------------" << std::endl;
       for (int i = 0; i < failed_img_dls.size(); i++){
         std::cout << failed_img_dls[i] << std::endl;
       }
       std::cout << "---------------------------------" << std::endl;
+      files.write_list_non_used(folder_path,"failed images.txt",failed_img_dls);
     }
     std::cout << "\ncompleted download" << std::endl;
     curl_global_cleanup();

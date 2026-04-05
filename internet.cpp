@@ -193,7 +193,7 @@ struct memorystruct getwebpage::fetch_image_to_memory(string url, string referer
   }
   return chunk;
 }
-
+// gets all the ids for the artist/search term, into a vector
 vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type, Json::Value *cookies,string referer){
     vector<post_info> post_ids;
     if (type == "use") {
@@ -214,7 +214,7 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
                 for (auto const& pid : root["body"]["illusts"].getMemberNames()) 
                     post_ids.push_back({pid,"1970-01-01"});
             }
-            if (root["body"]["manga"].isObject()) {
+            if (root["body"]["manga"].isObject()) { // defaults to 1970-01-01 as user querys don't have post dates
                 for (auto const& pid : root["body"]["manga"].getMemberNames()) 
                     post_ids.push_back({pid,"1970-01-01"});
             }
@@ -242,7 +242,7 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
                 }
                 page++;
                 // Safety break for testing (remove later)
-                if (page > 10) keep_going = false; 
+                // if (page > 10) keep_going = false; 
             } else {
                 keep_going = false;
             }
@@ -338,7 +338,7 @@ vector<post_info> getwebpage::get_all_post_ids(string url, string id,string type
 
     return post_ids;
 }
-string getwebpage::url_encode(string value){
+string getwebpage::url_encode(string value){ // encodes the urls so that curl doesn't throw and error when scraping
   CURL *curl = curl_easy_init();
     if (curl) {
         char *output = curl_easy_escape(curl, value.c_str(), value.length());
@@ -352,7 +352,7 @@ string getwebpage::url_encode(string value){
     }
     return value;
 }
-string getwebpage::url_decode(string value){
+string getwebpage::url_decode(string value){ // decodes the url for filenames and such
   CURL *curl = curl_easy_init();
   if (curl) {
     int outlength;
@@ -367,9 +367,10 @@ string getwebpage::url_decode(string value){
   }
   return value;
 }
-post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, string type, string artist_id){
-  post_data full_data = post_data("","",{""},false,"","",false,"");
-  if(type == "use" || type == "tag" || type == "user_tag"){
+ // gets the important details, like image urls and externals and other stuff from the induvidual posts
+post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, string type, string artist_id){  
+  post_data full_data = post_data("null","",{""},false,"","",false,""); // empty variable to escape easily if a fail arises
+  if(type == "use" || type == "tag" || type == "user_tag"){ // all pixiv can be done the same as links are pretty much the same
     string url,referer,json_out,json_img_out; 
     url = "https://www.pixiv.net/ajax/illust/"+post.post_id;
     referer="https://www.pixiv.net/artworks/"+post.post_id;
@@ -466,7 +467,7 @@ post_data getwebpage::get_post_details(post_info post, Json::Value *cookies, str
   }
   return full_data;
 }
-bool getwebpage::contains_ext(string *json_string){
+bool getwebpage::contains_ext(string *json_string){ // checks if url has valid extension
   vector<string> search_terms = {
         ".cc", 
         ".net", 

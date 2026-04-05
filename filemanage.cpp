@@ -9,13 +9,13 @@
 
 // if you want to use fs:: instead of std::filesystem::
 namespace fs = std::filesystem;
-string filehandler::configfolder = "";
+string filehandler::configfolder = ""; // set config folder for usage to write error logs
 // private helper
 bool filehandler::contains(string haystack, string needle) {
     return haystack.find(needle) != string::npos;
 }
 
-bool filehandler::copy_ffdb(string source,string dest){
+bool filehandler::copy_ffdb(string source,string dest){ // copies the cookies database from firefox to parse
   std::ifstream source_file(source,std::ios::binary);
   if (!source_file.is_open()){
     std::cout << "could not open firefox_db" << std::endl;
@@ -36,7 +36,7 @@ bool filehandler::copy_ffdb(string source,string dest){
   return true;
 }
 
-Json::Value filehandler::read_cookies(string file_path) {
+Json::Value filehandler::read_cookies(string file_path) { // read cookies file to get cookies and dl location
   Json::Value root;
   std::ifstream file(file_path);
   if (!file.is_open()){
@@ -48,7 +48,7 @@ Json::Value filehandler::read_cookies(string file_path) {
   return root;
 }
 
-bool filehandler::write_cookies(string file_path,string raw_json){
+bool filehandler::write_cookies(string file_path,string raw_json){ // write cookies and dl location to cookies file for saving
   Json::Value root;
   std::stringstream ss(raw_json);
   ss >> root;
@@ -66,14 +66,14 @@ bool filehandler::write_cookies(string file_path,string raw_json){
   return true;
 }
 
-string filehandler::get_cookies(string database, string dlloc){
+string filehandler::get_cookies(string database, string dlloc){ // reads the firefox database to get the cookies for pixiv and fanbox
   sqlite3* db;
   sqlite3_stmt* stmt;
-  if (sqlite3_open(database.c_str(),&db) != SQLITE_OK){
+  if (sqlite3_open(database.c_str(),&db) != SQLITE_OK){ // opens the database
     std::cout << "failed to open database " << sqlite3_errmsg(db) << std::endl;
     return "{}";
   }
-  string query = "SELECT host, name, value FROM moz_cookies WHERE host LIKE '%pixiv.net' OR host LIKE '%fanbox.cc'";
+  string query = "SELECT host, name, value FROM moz_cookies WHERE host LIKE '%pixiv.net' OR host LIKE '%fanbox.cc'"; // sql query
   if (sqlite3_prepare_v2(db,query.c_str(),-1,&stmt,NULL) != SQLITE_OK){
     std::cout << "error failed to prepare query " << sqlite3_errmsg(db) << std::endl;
     sqlite3_close(db);
@@ -84,7 +84,7 @@ string filehandler::get_cookies(string database, string dlloc){
   root["pixiv"] = "";
   root["fanbox"] = "";
 
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  while (sqlite3_step(stmt) == SQLITE_ROW) { // parsing the database query output
     string host = (const char*)sqlite3_column_text(stmt, 0);
     string name = (const char*)sqlite3_column_text(stmt, 1);
     string value = (const char*)sqlite3_column_text(stmt, 2);
@@ -106,7 +106,7 @@ string filehandler::get_cookies(string database, string dlloc){
   return root.toStyledString();
 }
 
-string filehandler::get_folder_name(string url){
+string filehandler::get_folder_name(string url){ // parses the url to get what the parent download for the scrape is called
   if (url.find("pixiv.net") != string::npos){
     if(url.find("/users/") != string::npos){
       string after = url.substr(url.find("/users/")+7);
@@ -131,7 +131,7 @@ string filehandler::get_folder_name(string url){
     return "unknown dump";
   }
 }
-string filehandler::clean_filename(string input) {
+string filehandler::clean_filename(string input) { // removes any characters the OS won't like from the file name
     string invalid_chars = "\\/:?\"<>|*";
     for (char &c : input) {
         // checks if the current char 'c' is in the invalid list
@@ -141,12 +141,12 @@ string filehandler::clean_filename(string input) {
     }
     return input;
 }
-bool filehandler::create_folder(string path) {
+bool filehandler::create_folder(string path) { // creates a folder in the path
     try {
         // create_directories works like "mkdir -p", creating parents if needed.
         // it returns false if folder exists, but does not throw error.
         if (std::filesystem::create_directories(path)) {
-            if (dir_create == false){
+            if (dir_create == false){ // check for if it has already created a directory
             std::cout << "created directory: " << path << std::endl;
             dir_create = true;
             }
@@ -157,14 +157,14 @@ bool filehandler::create_folder(string path) {
         return false;
     }
 }
-string filehandler::get_ext(string url) {
+string filehandler::get_ext(string url) { // gets the extension of an image for downloading
     if (url.find(".png") != string::npos) return ".png";
     if (url.find(".jpg") != string::npos) return ".jpg";
     if (url.find(".jpeg") != string::npos) return ".jpeg";
     if (url.find(".gif") != string::npos) return ".gif";
     return ".jpg"; // fallback
 }
-bool filehandler::write_out(string responce){
+bool filehandler::write_out(string responce){ // error output
   std::ofstream output_log(configfolder+"output_log.txt");
   if (!output_log.is_open()){
     std::cout << "unable to open file" << std::endl;
@@ -174,6 +174,7 @@ bool filehandler::write_out(string responce){
   output_log.close();
   return true;
 }
+// downloads the image to disk
 bool filehandler::download_img(string url,Json::Value* cookies, string referer,string dl_loc, string img_name, getwebpage& internet){
   memorystruct image = internet.fetch_image_to_memory(url, referer, cookies);
   if (image.memory == NULL) {
@@ -194,6 +195,7 @@ bool filehandler::download_img(string url,Json::Value* cookies, string referer,s
   free(image.memory);
   return true;
 }
+// takes all the image data and writes to a zip file then writes the zip to disk
 bool filehandler::zip_n_dl(vector<img_details>& imgs_to_zip, string dl_name, string dl_path){
   int error=0;
   // ensure we don't end up with "//" if dl_path already has a slash
