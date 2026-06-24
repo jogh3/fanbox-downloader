@@ -184,8 +184,11 @@ struct memorystruct getwebpage::fetch_image_to_memory(string url, string referer
   }
   if (chunk.size < 100){
     std::cout << "error downloading " << url << std::endl;
-    std::cout << "response " << chunk.memory << std::endl;
-    chunk.memory = NULL;
+    if (chunk.memory != NULL) {
+      std::cout << "response " << chunk.memory << std::endl;
+      free(chunk.memory); // this prevents the memory leak!
+      chunk.memory = NULL;
+    }
     chunk.size = 0;
   }
   if (headers) {
